@@ -46,6 +46,7 @@ module ddc_chain
    reg [31:0]  phase;
 
    wire [17:0] scale_factor;
+   wire [2:0]  gain_bits;
    wire [cwidth-1:0] i_cordic, q_cordic;
    wire [WIDTH-1:0] i_cordic_clip, q_cordic_clip;
    wire [WIDTH-1:0] i_cic, q_cic;
@@ -64,9 +65,9 @@ module ddc_chain
      (.clk(clk),.rst(rst),.strobe(set_stb),.addr(set_addr),
       .in(set_data),.out(phase_inc),.changed());
 
-   setting_reg #(.my_addr(BASE+1), .width(18)) sr_1
+   setting_reg #(.my_addr(BASE+1), .width(21)) sr_1
      (.clk(clk),.rst(rst),.strobe(set_stb),.addr(set_addr),
-      .in(set_data),.out(scale_factor),.changed());
+      .in(set_data),.out({gain_bits, scale_factor}),.changed());
 
    setting_reg #(.my_addr(BASE+2), .width(10)) sr_2
      (.clk(clk),.rst(rst),.strobe(set_stb),.addr(set_addr),
@@ -122,12 +123,14 @@ module ddc_chain
 
    cic_decim #(.bw(WIDTH))
      decim_i (.clock(clk),.reset(rst),.enable(ddc_enb),
-	      .rate(cic_decim_rate),.strobe_in(1'b1),.strobe_out(strobe_cic),
+	      .rate(cic_decim_rate),.gain_bits(gain_bits),
+	      .strobe_in(1'b1),.strobe_out(strobe_cic),
 	      .signal_in(i_cordic_clip),.signal_out(i_cic));
    
    cic_decim #(.bw(WIDTH))
      decim_q (.clock(clk),.reset(rst),.enable(ddc_enb),
-	      .rate(cic_decim_rate),.strobe_in(1'b1),.strobe_out(strobe_cic),
+	      .rate(cic_decim_rate),.gain_bits(gain_bits),
+	      .strobe_in(1'b1),.strobe_out(strobe_cic),
 	      .signal_in(q_cordic_clip),.signal_out(q_cic));
 
    // First (small) halfband  24 bit I/O

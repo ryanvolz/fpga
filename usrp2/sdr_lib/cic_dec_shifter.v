@@ -23,12 +23,14 @@
 // NOTE   This only works for N=4, max decim rate of 128
 // NOTE   signal "rate" is EQUAL TO the actual rate, no more -1 BS
 
-module cic_dec_shifter(rate,signal_in,signal_out);
+module cic_dec_shifter(rate,signal_in,addedgain_bits,signal_out);
    parameter bw = 16;
    parameter maxbitgain = 28;
+   parameter addedgain_width = 3;
 
    input [7:0] rate;
    input       wire [bw+maxbitgain-1:0] signal_in;
+   input [addedgain_width-1:0] addedgain_bits;
    output      reg [bw-1:0] signal_out;
 
    function [4:0] bitgain;
@@ -67,40 +69,20 @@ module cic_dec_shifter(rate,signal_in,signal_out);
 	default : bitgain = 28;
       endcase // case(rate)
    endfunction // bitgain
-   
+
    wire [4:0] 	  shift = bitgain(rate);
-   
-   // We should be able to do this, but can't ....
-   // assign 	  signal_out = signal_in[shift+bw-1:shift];
-   
+
+   localparam padbits = 2**addedgain_width-1;
+
+   wire [bw+maxbitgain+padbits-1:0] signal_pad = {signal_in, {padbits{1'b0}}};
+
+   // want to compute the following, but Xilinx ISE 12.2 has a bug with subtraction in indexing
+   //signal_out = signal_pad[(bw+padbits-1)+shift-addedgain_bits -: bw];
+
+   wire [5:0] total_shift = padbits + {1'b0, shift} - {{(6-addedgain_width){1'b0}}, addedgain_bits};
+
    always @*
-     case(shift)
-       5'd0  : signal_out = signal_in[0+bw-1:0];
-       5'd4  : signal_out = signal_in[4+bw-1:4];
-       5'd7  : signal_out = signal_in[7+bw-1:7];
-       5'd8  : signal_out = signal_in[8+bw-1:8];
-       5'd10 : signal_out = signal_in[10+bw-1:10];
-       5'd11 : signal_out = signal_in[11+bw-1:11];
-       5'd12 : signal_out = signal_in[12+bw-1:12];
-       5'd13 : signal_out = signal_in[13+bw-1:13];
-       5'd14 : signal_out = signal_in[14+bw-1:14];
-       5'd15 : signal_out = signal_in[15+bw-1:15];
-       5'd16 : signal_out = signal_in[16+bw-1:16];
-       5'd17 : signal_out = signal_in[17+bw-1:17];
-       5'd18 : signal_out = signal_in[18+bw-1:18];
-       5'd19 : signal_out = signal_in[19+bw-1:19];
-       5'd20 : signal_out = signal_in[20+bw-1:20];
-       5'd21 : signal_out = signal_in[21+bw-1:21];
-       5'd22 : signal_out = signal_in[22+bw-1:22];
-       5'd23 : signal_out = signal_in[23+bw-1:23];
-       5'd24 : signal_out = signal_in[24+bw-1:24];
-       5'd25 : signal_out = signal_in[25+bw-1:25];
-       5'd26 : signal_out = signal_in[26+bw-1:26];
-       5'd27 : signal_out = signal_in[27+bw-1:27];
-       5'd28 : signal_out = signal_in[28+bw-1:28];
-       
-       default : signal_out = signal_in[28+bw-1:28];
-     endcase // case(shift)
+     signal_out = signal_pad[bw-1+total_shift -: bw];
 
 endmodule // cic_dec_shifter
 

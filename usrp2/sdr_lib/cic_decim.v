@@ -26,6 +26,7 @@ module cic_decim
      input reset,
      input enable,
      input [7:0] rate,
+     input [2:0] gain_bits,
      input strobe_in,
      input strobe_out,
      input [bw-1:0] signal_in,
@@ -76,11 +77,11 @@ module cic_decim
 	       pipeline[i] <= pipeline[i-1] - differentiator[i];
 	    end
        end // if (enable && strobe_out)
-   
+
    wire [bw-1:0] signal_out_unreg;
-   
+
    cic_dec_shifter #(bw)
-     cic_dec_shifter(rate,pipeline[N-1],signal_out_unreg);
+     cic_dec_shifter(rate,pipeline[N-1],gain_bits,signal_out_unreg);
 
    always @(posedge clock)
      signal_out <= signal_out_unreg;
