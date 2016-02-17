@@ -81,7 +81,7 @@ module cic_decim
    wire [bw-1:0] signal_out_unreg;
 
    cic_dec_shifter #(bw)
-     cic_dec_shifter(rate,pipeline[N-1],gain_bits,signal_out_unreg);
+     cic_dec_shifter(clock,rate,pipeline[N-1],gain_bits,signal_out_unreg);
 
    always @(posedge clock)
      signal_out <= signal_out_unreg;

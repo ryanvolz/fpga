@@ -23,11 +23,12 @@
 // NOTE   This only works for N=4, max decim rate of 128
 // NOTE   signal "rate" is EQUAL TO the actual rate, no more -1 BS
 
-module cic_dec_shifter(rate,signal_in,addedgain_bits,signal_out);
+module cic_dec_shifter(clock,rate,signal_in,addedgain_bits,signal_out);
    parameter bw = 16;
    parameter maxbitgain = 28;
    parameter addedgain_width = 3;
 
+   input clock;
    input [7:0] rate;
    input       wire [bw+maxbitgain-1:0] signal_in;
    input [addedgain_width-1:0] addedgain_bits;
@@ -70,7 +71,7 @@ module cic_dec_shifter(rate,signal_in,addedgain_bits,signal_out);
       endcase // case(rate)
    endfunction // bitgain
 
-   wire [4:0] 	  shift = bitgain(rate);
+   wire [4:0]	shift = bitgain(rate);
 
    localparam padbits = 2**addedgain_width-1;
 
@@ -79,7 +80,9 @@ module cic_dec_shifter(rate,signal_in,addedgain_bits,signal_out);
    // want to compute the following, but Xilinx ISE 12.2 has a bug with subtraction in indexing
    //signal_out = signal_pad[(bw+padbits-1)+shift-addedgain_bits -: bw];
 
-   wire [5:0] total_shift = padbits + {1'b0, shift} - {{(6-addedgain_width){1'b0}}, addedgain_bits};
+   reg [5:0] total_shift;
+   always @(posedge clock)
+     total_shift = padbits + {1'b0, shift} - {{(6-addedgain_width){1'b0}}, addedgain_bits};
 
    always @*
      signal_out = signal_pad[bw-1+total_shift -: bw];
