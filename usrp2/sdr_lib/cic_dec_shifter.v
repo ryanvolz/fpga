@@ -23,14 +23,14 @@
 // NOTE   This only works for N=4, max decim rate of 128
 // NOTE   signal "rate" is EQUAL TO the actual rate, no more -1 BS
 
-module cic_dec_shifter(clock,rate,signal_in,signal_out);
-   parameter bw = 16;
-   parameter maxbitgain = 28;
-
-   input clock;
-   input [7:0] rate;
-   input       wire [bw+maxbitgain-1:0] signal_in;
-   output      reg [bw-1:0] signal_out;
+module cic_dec_shifter
+   #(parameter bw = 16, maxbitgain = 28)
+     (input clk,
+      input [7:0] rate,
+      input strobe_in,
+      output reg strobe_out,
+      input [bw+maxbitgain-1:0] signal_in,
+      output reg [bw-1:0] signal_out);
 
    function [4:0] bitgain;
       input [7:0] rate;
@@ -73,11 +73,13 @@ module cic_dec_shifter(clock,rate,signal_in,signal_out);
    // force user encoding so signal_out can be inferred as a multiplexer
    (* signal_encoding = "user" *)
    reg [4:0] shift;
-   always @(posedge clock)
+   always @(posedge clk)
      shift <= bitgain(rate);
 
-   always @*
-     signal_out = signal_in[shift +: bw];
+   always @(posedge clk) begin
+     signal_out <= signal_in[shift +: bw];
+     strobe_out <= strobe_in;
+   end
 
 endmodule // cic_dec_shifter
 

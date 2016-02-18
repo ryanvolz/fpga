@@ -28,23 +28,25 @@ module cic_decim
      input [7:0] rate,
      input [2:0] gain_bits,
      input strobe_in,
-     input strobe_out,
+     input strobe_diff,
+     output strobe_out,
      input [bw-1:0] signal_in,
-     output reg [bw-1:0] signal_out);
+     output [bw-1:0] signal_out);
 
    localparam 	     maxbitgain = N * log2_of_max_rate;
-   
+
    wire [bw+maxbitgain-1:0] signal_in_ext;
    reg [bw+maxbitgain-1:0]  integrator [0:N-1];
    reg [bw+maxbitgain-1:0]  differentiator [0:N-1];
    reg [bw+maxbitgain-1:0]  pipeline [0:N-1];
    reg [bw+maxbitgain-1:0]  sampler;
-   
+   reg strobe_pipeline;
+
    integer 		    i;
-   
-   sign_extend #(bw,bw+maxbitgain) 
+
+   sign_extend #(bw,bw+maxbitgain)
      ext_input (.in(signal_in),.out(signal_in_ext));
-   
+
    always @(posedge clock)
      if(~enable)
        for(i=0;i<N;i=i+1)
@@ -54,8 +56,8 @@ module cic_decim
 	  integrator[0] <= integrator[0] + signal_in_ext;
 	  for(i=1;i<N;i=i+1)
 	    integrator[i] <= integrator[i] + integrator[i-1];
-       end	
-   
+       end
+
    always @(posedge clock)
      if(~enable)
        begin
@@ -66,7 +68,7 @@ module cic_decim
 	       differentiator[i] <= 0;
 	    end
        end
-     else if (strobe_out)
+     else if (strobe_diff)
        begin
 	  sampler <= integrator[N-1];
 	  differentiator[0] <= sampler;
@@ -76,7 +78,11 @@ module cic_decim
 	       differentiator[i] <= pipeline[i-1];
 	       pipeline[i] <= pipeline[i-1] - differentiator[i];
 	    end
-       end // if (enable && strobe_out)
+       end // if (enable && strobe_diff)
+
+   // advance strobe to account for pipeline delay
+   always @(posedge clock)
+     strobe_pipeline <= strobe_diff;
 
    // pad to allow for added gain when shift from decimation is small
    localparam gainwidth = 3;
@@ -85,22 +91,21 @@ module cic_decim
 
    wire [paddedbw-1:0] signal_pad = {pipeline[N-1], {padbits{1'b0}}};
    wire [bw+padbits-1:0] signal_shifted;
+   wire strobe_shifted;
 
    cic_dec_shifter #(bw+padbits)
-     cic_dec_shifter(clock,rate,signal_pad,signal_shifted);
+     cic_dec_shifter(.clk(clock),.rate(rate),
+                     .strobe_in(strobe_pipeline),.strobe_out(strobe_shifted),
+                     .signal_in(signal_pad),.signal_out(signal_shifted));
 
    // use register for gainidx to limit delay
    reg [gainwidth-1:0] gainidx;
    always @(posedge clock)
      gainidx <= padbits - gain_bits;
 
-   wire [bw-1:0] signal_out_unreg;
-
    // apply variable gain by selecting appropriate part of signal_shifted and clipping
    variable_part_select_and_clip #(.WIDTH_IN(bw+padbits),.WIDTH_OUT(bw),.INDEX_WIDTH(gainwidth))
-     vargain(.clk(clock),.signal_in(signal_shifted),.lowidx(gainidx),.signal_out(signal_out_unreg));
+     vargain(.clk(clock),.strobe_in(strobe_shifted),.strobe_out(strobe_out),
+             .signal_in(signal_shifted),.lowidx(gainidx),.signal_out(signal_out));
 
-   always @(posedge clock)
-     signal_out <= signal_out_unreg;
-   
 endmodule // cic_decim

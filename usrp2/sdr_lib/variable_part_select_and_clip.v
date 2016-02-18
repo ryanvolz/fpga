@@ -23,9 +23,11 @@
 module variable_part_select_and_clip
   #(parameter WIDTH_IN=31, WIDTH_OUT=24, INDEX_WIDTH=3)
     (input clk,
+     input strobe_in,
+     output reg strobe_out,
      input [WIDTH_IN-1:0] signal_in,
      input [INDEX_WIDTH-1:0] lowidx,
-     output [WIDTH_OUT-1:0] signal_out);
+     output reg [WIDTH_OUT-1:0] signal_out);
 
    localparam MASKBW = WIDTH_IN - WIDTH_OUT;
 
@@ -35,21 +37,26 @@ module variable_part_select_and_clip
    // bit order reversed so we can read in reverse
    reg [0:MASKBW+MASKBW-1] maskrom = {{MASKBW{1'b1}}, {MASKBW{1'b0}}};
 
+   function [MASKBW-1:0] clipmask;
+      input [INDEX_WIDTH-1:0] idx;
+      clipmask = maskrom[MASKBW-1+idx -: MASKBW];
+// with MASKBW == 7 and INDEX_WIDTH ==3, this is equivalent to the following:
+//    case(idx)
+//      3'd0 : clipmask = 7'b1111111;
+//      3'd1 : clipmask = 7'b1111110;
+//      3'd2 : clipmask = 7'b1111100;
+//      3'd3 : clipmask = 7'b1111000;
+//      3'd4 : clipmask = 7'b1110000;
+//      3'd5 : clipmask = 7'b1100000;
+//      3'd6 : clipmask = 7'b1000000;
+//      default : clipmask = 7'b0000000;
+//    endcase
+   endfunction
+
    // use register for mask to limit delay
    reg [MASKBW-1:0] mask;
    always @(posedge clk)
-     mask <= maskrom[MASKBW-1+lowidx -: MASKBW];
-// with MASKBW == 7 and INDEX_WIDTH ==3, this is equivalent to the following:
-//   case(idx)
-//      3'd0 : mask <= 7'b1111111;
-//      3'd1 : mask <= 7'b1111110;
-//      3'd2 : mask <= 7'b1111100;
-//      3'd3 : mask <= 7'b1111000;
-//      3'd4 : mask <= 7'b1110000;
-//      3'd5 : mask <= 7'b1100000;
-//      3'd6 : mask <= 7'b1000000;
-//      default : mask <= 7'b0000000;
-//   endcase
+     mask <= clipmask(lowidx);
 
    wire overflow = |((head[MASKBW-1:0] ^ {MASKBW{head[MASKBW]}}) & mask);
 
@@ -60,6 +67,9 @@ module variable_part_select_and_clip
 
    wire [WIDTH_OUT-1:0] signal_selected = signal_in[lowidx +: WIDTH_OUT];
 
-   assign signal_out = overflow ? clipped : signal_selected;
+   always @(posedge clk) begin
+     signal_out <= overflow ? clipped : signal_selected;
+     strobe_out <= strobe_in;
+   end
 
 endmodule // variable_part_select_and_clip
