@@ -23,15 +23,13 @@
 // NOTE   This only works for N=4, max decim rate of 128
 // NOTE   signal "rate" is EQUAL TO the actual rate, no more -1 BS
 
-module cic_dec_shifter(clock,rate,signal_in,addedgain_bits,signal_out);
+module cic_dec_shifter(clock,rate,signal_in,signal_out);
    parameter bw = 16;
    parameter maxbitgain = 28;
-   parameter addedgain_width = 3;
 
    input clock;
    input [7:0] rate;
    input       wire [bw+maxbitgain-1:0] signal_in;
-   input [addedgain_width-1:0] addedgain_bits;
    output      reg [bw-1:0] signal_out;
 
    function [4:0] bitgain;
@@ -72,58 +70,14 @@ module cic_dec_shifter(clock,rate,signal_in,addedgain_bits,signal_out);
    endfunction // bitgain
 
    // use register for shift to limit delay
-   // force user encoding so signal_shifted can be inferred as a multiplexer
+   // force user encoding so signal_out can be inferred as a multiplexer
    (* signal_encoding = "user" *)
    reg [4:0] shift;
    always @(posedge clock)
      shift <= bitgain(rate);
 
-   // pad to allow for added gain when shift from decimation is small
-   localparam padbits = 2**addedgain_width-1;
-   localparam paddedbw = bw + maxbitgain + padbits;
-
-   wire [paddedbw-1:0] signal_pad = {signal_in, {padbits{1'b0}}};
-
-   // apply shift needed from decimation
-   wire [bw+padbits-1:0] signal_shifted = signal_pad[bw-1+padbits+shift -: bw+padbits];
-
-   // isolate bits to be clipped and calculate index for applying added gain
-   wire [padbits:0] head = signal_shifted[bw+padbits-1 -: padbits+1];
-
-   function [padbits-1:0] clipmask;
-      input [addedgain_width-1:0] gain_bits;
-      case(gain_bits)
-        3'd1 : clipmask = 7'b1000000;
-        3'd2 : clipmask = 7'b1100000;
-        3'd3 : clipmask = 7'b1110000;
-        3'd4 : clipmask = 7'b1111000;
-        3'd5 : clipmask = 7'b1111100;
-        3'd6 : clipmask = 7'b1111110;
-        3'd7 : clipmask = 7'b1111111;
-        default : clipmask = 7'b0000000;
-      endcase
-   endfunction
-
-   // use register for mask and gainidx to limit delay
-   reg [padbits-1:0] mask;
-   reg [addedgain_width:0] gainidx;
-   always @(posedge clock)
-     begin
-        mask <= clipmask(addedgain_bits);
-        gainidx <= padbits - {1'b0, addedgain_bits};
-     end
-
-   // determine if an overflow would occur when applying added gain
-   wire overflow = |((head[padbits-1:0] ^ {padbits{head[padbits]}}) & mask);
-
-   // apply added gain
-   wire [bw-1:0] signal_clipped = signal_pad[paddedbw-1] ?
-                                    {1'b1, {(bw-1){1'b0}}} :
-                                    {1'b0, {(bw-1){1'b1}}};
-   wire [bw-1:0] signal_gained = signal_shifted[bw-1+gainidx -: bw];
-
    always @*
-     signal_out = overflow ? signal_clipped : signal_gained;
+     signal_out = signal_in[shift +: bw];
 
 endmodule // cic_dec_shifter
 

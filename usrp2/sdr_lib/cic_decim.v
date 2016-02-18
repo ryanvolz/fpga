@@ -78,10 +78,27 @@ module cic_decim
 	    end
        end // if (enable && strobe_out)
 
+   // pad to allow for added gain when shift from decimation is small
+   localparam gainwidth = 3;
+   localparam padbits = 2**gainwidth-1;
+   localparam paddedbw = bw + maxbitgain + padbits;
+
+   wire [paddedbw-1:0] signal_pad = {pipeline[N-1], {padbits{1'b0}}};
+   wire [bw+padbits-1:0] signal_shifted;
+
+   cic_dec_shifter #(bw+padbits)
+     cic_dec_shifter(clock,rate,signal_pad,signal_shifted);
+
+   // use register for gainidx to limit delay
+   reg [gainwidth-1:0] gainidx;
+   always @(posedge clock)
+     gainidx <= padbits - gain_bits;
+
    wire [bw-1:0] signal_out_unreg;
 
-   cic_dec_shifter #(bw)
-     cic_dec_shifter(clock,rate,pipeline[N-1],gain_bits,signal_out_unreg);
+   // apply variable gain by selecting appropriate part of signal_shifted and clipping
+   variable_part_select_and_clip #(.WIDTH_IN(bw+padbits),.WIDTH_OUT(bw),.INDEX_WIDTH(gainwidth))
+     vargain(.clk(clock),.signal_in(signal_shifted),.lowidx(gainidx),.signal_out(signal_out_unreg));
 
    always @(posedge clock)
      signal_out <= signal_out_unreg;
